@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.dependencies import PaginationDep, SessionDep
+from app.dependencies import CacheDep, PaginationDep, SessionDep
 from app.repositories.team import TeamRepository
 from app.schemas import Page
 from app.schemas.team import TeamRead
@@ -13,8 +13,8 @@ from app.services.team import TeamService
 router = APIRouter(prefix="/api/v1/teams", tags=["teams"])
 
 
-def _service(session: SessionDep) -> TeamService:
-    return TeamService(TeamRepository(session))
+def _service(session: SessionDep, cache: CacheDep) -> TeamService:
+    return TeamService(TeamRepository(session), cache)
 
 
 ServiceDep = Annotated[TeamService, Depends(_service)]

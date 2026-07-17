@@ -5,11 +5,22 @@ from typing import Annotated
 from fastapi import Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache import redis_client
 from app.database import get_db
+from app.services.cache import CacheService
 
 # ── Session ───────────────────────────────────────────────────────────────────
 
 SessionDep = Annotated[AsyncSession, Depends(get_db)]
+
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
+
+def get_cache_service() -> CacheService:
+    return CacheService(redis_client)
+
+
+CacheDep = Annotated[CacheService, Depends(get_cache_service)]
 
 
 # ── Pagination ────────────────────────────────────────────────────────────────

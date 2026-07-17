@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.dependencies import PaginationDep, SessionDep
+from app.dependencies import CacheDep, PaginationDep, SessionDep
 from app.enums import MatchStatus
 from app.repositories.match import MatchRepository
 from app.repositories.prediction import PredictionRepository
@@ -18,16 +18,16 @@ from app.services.prediction import DuplicatePredictionError, MatchNotFoundError
 router = APIRouter(prefix="/api/v1/matches", tags=["matches"])
 
 
-def _match_service(session: SessionDep) -> MatchService:
-    return MatchService(MatchRepository(session))
+def _match_service(session: SessionDep, cache: CacheDep) -> MatchService:
+    return MatchService(MatchRepository(session), cache)
 
 
-def _prediction_service(session: SessionDep) -> PredictionService:
-    return PredictionService(MatchRepository(session), PredictionRepository(session))
+def _prediction_service(session: SessionDep, cache: CacheDep) -> PredictionService:
+    return PredictionService(MatchRepository(session), PredictionRepository(session), cache)
 
 
-def _model_prediction_service(session: SessionDep) -> ModelPredictionService:
-    return ModelPredictionService(MatchRepository(session))
+def _model_prediction_service(session: SessionDep, cache: CacheDep) -> ModelPredictionService:
+    return ModelPredictionService(MatchRepository(session), cache)
 
 
 MatchServiceDep = Annotated[MatchService, Depends(_match_service)]

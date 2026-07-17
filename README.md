@@ -176,6 +176,23 @@ curl -X POST "http://localhost:8000/api/v1/matches/1/predictions" \
 | 409 | Session has already predicted this match |
 | 422 | Invalid field values (bad outcome, negative score, score/outcome mismatch, partial scores) |
 
+## Caching
+
+All read endpoints are served from Redis when available. Redis failures are swallowed silently and the request falls through to PostgreSQL, so the API stays up even if Redis is down.
+
+| Endpoint | Cache key pattern | TTL |
+|----------|-------------------|-----|
+| `GET /api/v1/teams` | `cupcast:teams:list:{limit}:{offset}` | 10 min |
+| `GET /api/v1/teams/{id}` | `cupcast:teams:{id}` | 10 min |
+| `GET /api/v1/matches` | `cupcast:matches:list:{limit}:{offset}:{status}:{stage}:{team_id}` | 2 min |
+| `GET /api/v1/matches/{id}` | `cupcast:matches:{id}` | 2 min |
+| `GET /api/v1/matches/{id}/model-prediction` | `cupcast:matches:{id}:model-prediction` | 5 min |
+| `GET /api/v1/matches/{id}/prediction-summary` | `cupcast:matches:{id}:prediction-summary` | 30 sec |
+
+`POST /api/v1/matches/{id}/predictions` deletes the prediction-summary cache key immediately after inserting the new prediction, so the next GET returns a fresh count from PostgreSQL.
+
+Cache behaviour is logged at `DEBUG` level (`cache hit`, `cache miss`, `cache invalidated`). Errors are logged at `WARNING` level but never propagated to API consumers.
+
 **Paginated response shape:**
 ```json
 {

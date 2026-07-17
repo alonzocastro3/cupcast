@@ -8,6 +8,11 @@ from app.schemas.prediction import (
     PredictionSubmitResponse,
     PredictionSummary,
 )
+from app.services.cache import (
+    CacheService,
+    TTL_PREDICTION_SUMMARY,
+    key_prediction_summary,
+)
 
 
 class MatchNotFoundError(Exception):
@@ -23,16 +28,31 @@ class PredictionService:
         self,
         match_repo: MatchRepository,
         prediction_repo: PredictionRepository,
+        cache: CacheService | None = None,
     ) -> None:
         self.match_repo = match_repo
         self.prediction_repo = prediction_repo
+        self._cache = cache
 
     async def get_summary(self, match_id: int) -> PredictionSummary | None:
         """Return None when the match does not exist."""
         match = await self.match_repo.get(match_id)
         if match is None:
             return None
-        return await self._build_summary(match_id)
+
+        key = key_prediction_summary(match_id)
+
+        if self._cache:
+            cached = await self._cache.get(key)
+            if cached is not None:
+                return PredictionSummary.model_validate(cached)
+
+        summary = await self._build_summary(match_id)
+
+        if self._cache:
+            await self._cache.set(key, summary.model_dump(mode="json"), TTL_PREDICTION_SUMMARY)
+
+        return summary
 
     async def submit_prediction(
         self, match_id: int, data: PredictionSubmitRequest
@@ -57,6 +77,11 @@ class PredictionService:
             predicted_away_score=data.predicted_away_score,
         )
         created = await self.prediction_repo.create(prediction)
+
+        # Invalidate stale summary so the next GET reflects the new prediction.
+        if self._cache:
+            await self._cache.delete(key_prediction_summary(match_id))
+
         summary = await self._build_summary(match_id)
 
         return PredictionSubmitResponse(prediction=created, community_summary=summary)  # type: ignore[arg-type]

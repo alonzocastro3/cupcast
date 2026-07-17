@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from typing import Any
 from urllib.parse import urlparse
 
 import asyncpg
@@ -12,6 +13,7 @@ from sqlalchemy.pool import NullPool
 import app.models  # noqa: F401 — registers all models with Base.metadata
 from app.config import settings
 from app.database import Base, get_db
+from app.dependencies import get_cache_service
 from app.main import app as fastapi_app
 
 _TEST_DB_URL = settings.database_url.rsplit("/", 1)[0] + "/cupcast_test"
@@ -33,6 +35,21 @@ async def _ensure_test_db() -> None:
         pass
     finally:
         await conn.close()
+
+
+# ── No-op cache (used by existing fixtures to prevent Redis state leakage) ────
+
+class _NoOpCache:
+    """Drop-in for CacheService that never reads or writes Redis."""
+
+    async def get(self, key: str) -> Any | None:
+        return None
+
+    async def set(self, key: str, value: Any, ttl: int) -> None:
+        pass
+
+    async def delete(self, key: str) -> None:
+        pass
 
 
 # ── HTTP client (hits live cupcast DB — used only for /health) ────────────────
@@ -68,16 +85,18 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
         await session.rollback()
 
 
-# ── API client wired to test DB ───────────────────────────────────────────────
+# ── API client wired to test DB + no-op cache ─────────────────────────────────
 
 @pytest_asyncio.fixture
 async def api_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """HTTP client whose get_db dependency is overridden with the test session."""
+    """HTTP client whose get_db and get_cache_service dependencies are overridden."""
 
-    async def _override() -> AsyncGenerator[AsyncSession, None]:
+    async def _override_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
-    fastapi_app.dependency_overrides[get_db] = _override
+    fastapi_app.dependency_overrides[get_db] = _override_db
+    fastapi_app.dependency_overrides[get_cache_service] = lambda: _NoOpCache()
     async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as ac:
         yield ac
     fastapi_app.dependency_overrides.pop(get_db, None)
+    fastapi_app.dependency_overrides.pop(get_cache_service, None)
