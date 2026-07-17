@@ -11,7 +11,7 @@ from sqlalchemy.pool import NullPool
 
 import app.models  # noqa: F401 — registers all models with Base.metadata
 from app.config import settings
-from app.database import Base
+from app.database import Base, get_db
 from app.main import app as fastapi_app
 
 _TEST_DB_URL = settings.database_url.rsplit("/", 1)[0] + "/cupcast_test"
@@ -35,7 +35,7 @@ async def _ensure_test_db() -> None:
         await conn.close()
 
 
-# ── HTTP client ──────────────────────────────────────────────────────────────
+# ── HTTP client (hits live cupcast DB — used only for /health) ────────────────
 
 @pytest_asyncio.fixture
 async def client() -> AsyncGenerator[AsyncClient, None]:
@@ -66,3 +66,18 @@ async def db_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
     async with factory() as session:
         yield session
         await session.rollback()
+
+
+# ── API client wired to test DB ───────────────────────────────────────────────
+
+@pytest_asyncio.fixture
+async def api_client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    """HTTP client whose get_db dependency is overridden with the test session."""
+
+    async def _override() -> AsyncGenerator[AsyncSession, None]:
+        yield db_session
+
+    fastapi_app.dependency_overrides[get_db] = _override
+    async with AsyncClient(transport=ASGITransport(app=fastapi_app), base_url="http://test") as ac:
+        yield ac
+    fastapi_app.dependency_overrides.pop(get_db, None)

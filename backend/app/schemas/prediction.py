@@ -24,3 +24,14 @@ class PredictionRead(PredictionBase):
 
     id: int
     created_at: datetime
+
+
+class PredictionSummary(BaseModel):
+    match_id: int
+    total_predictions: int
+    home_win_count: int
+    draw_count: int
+    away_win_count: int
+    home_win_percentage: float
+    draw_percentage: float
+    away_win_percentage: float

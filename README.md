@@ -74,6 +74,70 @@ npm install
 npm run dev
 ```
 
+## API Endpoints
+
+All endpoints are under `/api/v1`. Interactive docs at `http://localhost:8000/docs`.
+
+### Teams
+
+```bash
+# List all teams (paginated)
+curl "http://localhost:8000/api/v1/teams"
+curl "http://localhost:8000/api/v1/teams?limit=5&offset=0"
+
+# Get a single team
+curl "http://localhost:8000/api/v1/teams/1"
+```
+
+### Matches
+
+```bash
+# List all matches
+curl "http://localhost:8000/api/v1/matches"
+
+# Filter by status (scheduled | live | finished | cancelled)
+curl "http://localhost:8000/api/v1/matches?status=scheduled"
+
+# Filter by stage
+curl "http://localhost:8000/api/v1/matches?stage=group_a"
+
+# Filter by team (home OR away)
+curl "http://localhost:8000/api/v1/matches?team_id=1"
+
+# Combine filters + pagination
+curl "http://localhost:8000/api/v1/matches?status=live&stage=group_b&limit=10&offset=0"
+
+# Get a single match
+curl "http://localhost:8000/api/v1/matches/1"
+
+# Prediction summary for a match
+curl "http://localhost:8000/api/v1/matches/1/prediction-summary"
+```
+
+**Paginated response shape:**
+```json
+{
+  "items": [...],
+  "total": 12,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+**Prediction summary shape:**
+```json
+{
+  "match_id": 1,
+  "total_predictions": 150,
+  "home_win_count": 90,
+  "draw_count": 30,
+  "away_win_count": 30,
+  "home_win_percentage": 60.0,
+  "draw_percentage": 20.0,
+  "away_win_percentage": 20.0
+}
+```
+
 ## Database Migrations
 
 ```bash
