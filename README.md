@@ -77,22 +77,47 @@ npm run dev
 ## Database Migrations
 
 ```bash
-# Generate a new migration (run from backend/ or via docker compose exec)
-docker compose exec backend alembic revision --autogenerate -m "describe change"
-
-# Apply all pending migrations
+# Apply all pending migrations (required after first docker compose up)
 docker compose exec backend alembic upgrade head
 
-# Roll back one migration
+# Generate a migration after changing models
+docker compose exec backend alembic revision --autogenerate -m "describe change"
+
+# Roll back one step
 docker compose exec backend alembic downgrade -1
+
+# Check current state
+docker compose exec backend alembic current
+```
+
+## Seed Data
+
+Populates 8 teams (Groups A & B) and 12 group-stage matches. Safe to run multiple times.
+
+```bash
+docker compose exec backend python -m app.seed
+```
+
+To reseed after running tests (tests use an isolated `cupcast_test` database and do not touch `cupcast`):
+
+```bash
+docker compose exec backend python -m app.seed
 ```
 
 ## Running Tests
 
+Tests run against a separate `cupcast_test` database (created automatically by the test suite).
+
 ```bash
-docker compose exec backend pytest
-# or locally:
-cd backend && pytest
+# All tests with verbose output
+docker compose exec backend pytest -v
+
+# A single file
+docker compose exec backend pytest tests/test_models.py -v
+docker compose exec backend pytest tests/test_seed.py -v
+
+# Locally (requires Postgres + Redis running)
+cd backend && pytest -v
 ```
 
 ## Project Structure
@@ -104,15 +129,31 @@ cupcast/
 ├── backend/
 │   ├── Dockerfile
 │   ├── pyproject.toml
-│   ├── alembic/           # Alembic migration env + versions
+│   ├── alembic/
+│   │   ├── env.py               # Async migration runner
+│   │   └── versions/            # Generated migration files
 │   ├── app/
-│   │   ├── main.py        # FastAPI app, CORS, routers
-│   │   ├── config.py      # Typed settings via pydantic-settings
-│   │   ├── database.py    # Async SQLAlchemy engine + Base + get_db
-│   │   └── cache.py       # Redis async client
+│   │   ├── main.py              # FastAPI app, CORS
+│   │   ├── config.py            # Typed settings (pydantic-settings)
+│   │   ├── database.py          # Async SQLAlchemy engine + Base + get_db
+│   │   ├── cache.py             # Redis async client
+│   │   ├── enums.py             # MatchStatus, PredictedOutcome
+│   │   ├── seed.py              # Idempotent seed script
+│   │   ├── models/
+│   │   │   ├── team.py          # Team ORM model
+│   │   │   ├── match.py         # Match ORM model
+│   │   │   └── prediction.py    # Prediction ORM model
+│   │   └── schemas/
+│   │       ├── team.py          # Team Pydantic schemas
+│   │       ├── match.py         # Match Pydantic schemas
+│   │       └── prediction.py    # Prediction Pydantic schemas
 │   └── tests/
+│       ├── conftest.py          # HTTP client + test DB fixtures
+│       ├── test_health.py
+│       ├── test_models.py       # DB constraint integration tests
+│       └── test_seed.py         # Seed correctness + idempotency
 └── frontend/
     ├── Dockerfile
     ├── package.json
-    └── src/app/           # Next.js App Router
+    └── src/app/                 # Next.js App Router
 ```
