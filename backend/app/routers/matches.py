@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.dependencies import PaginationDep, SessionDep
 from app.enums import MatchStatus
@@ -10,10 +10,10 @@ from app.repositories.match import MatchRepository
 from app.repositories.prediction import PredictionRepository
 from app.schemas import Page
 from app.schemas.match import MatchRead
-from app.schemas.prediction import ModelPrediction, PredictionSummary
+from app.schemas.prediction import ModelPrediction, PredictionSubmitRequest, PredictionSubmitResponse, PredictionSummary
 from app.services.match import MatchService
 from app.services.model_prediction import ModelPredictionService
-from app.services.prediction import PredictionService
+from app.services.prediction import DuplicatePredictionError, MatchNotFoundError, PredictionService
 
 router = APIRouter(prefix="/api/v1/matches", tags=["matches"])
 
@@ -82,3 +82,24 @@ async def get_model_prediction(
     if prediction is None:
         raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
     return prediction
+
+
+@router.post(
+    "/{match_id}/predictions",
+    response_model=PredictionSubmitResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def submit_prediction(
+    match_id: int,
+    body: PredictionSubmitRequest,
+    service: PredictionServiceDep,
+) -> PredictionSubmitResponse:
+    try:
+        return await service.submit_prediction(match_id, body)
+    except MatchNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
+    except DuplicatePredictionError:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session '{body.session_id}' has already predicted match {match_id}",
+        )

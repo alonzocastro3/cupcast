@@ -112,7 +112,69 @@ curl "http://localhost:8000/api/v1/matches/1"
 
 # Prediction summary for a match
 curl "http://localhost:8000/api/v1/matches/1/prediction-summary"
+
+# Model prediction for a match
+curl "http://localhost:8000/api/v1/matches/1/model-prediction"
 ```
+
+### Predictions (anonymous submission)
+
+```bash
+# Submit a prediction (outcome only)
+curl -X POST "http://localhost:8000/api/v1/matches/1/predictions" \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "my-browser-uuid", "predicted_outcome": "home_win"}'
+
+# Submit a prediction with score guess
+curl -X POST "http://localhost:8000/api/v1/matches/1/predictions" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "my-browser-uuid",
+    "predicted_outcome": "home_win",
+    "predicted_home_score": 2,
+    "predicted_away_score": 1
+  }'
+```
+
+**Request fields:**
+| Field | Type | Required | Rules |
+|-------|------|----------|-------|
+| `session_id` | string | yes | 1–36 chars |
+| `predicted_outcome` | `home_win` \| `draw` \| `away_win` | yes | |
+| `predicted_home_score` | integer ≥ 0 | no | must be paired with away score; must agree with outcome |
+| `predicted_away_score` | integer ≥ 0 | no | must be paired with home score |
+
+**Response (201 Created):**
+```json
+{
+  "prediction": {
+    "id": 1,
+    "match_id": 1,
+    "session_id": "my-browser-uuid",
+    "predicted_outcome": "home_win",
+    "predicted_home_score": 2,
+    "predicted_away_score": 1,
+    "created_at": "2026-06-15T15:00:00Z"
+  },
+  "community_summary": {
+    "match_id": 1,
+    "total_predictions": 151,
+    "home_win_count": 91,
+    "draw_count": 30,
+    "away_win_count": 30,
+    "home_win_percentage": 60.26,
+    "draw_percentage": 19.87,
+    "away_win_percentage": 19.87
+  }
+}
+```
+
+**Error responses:**
+| Status | Reason |
+|--------|--------|
+| 404 | Match not found |
+| 409 | Session has already predicted this match |
+| 422 | Invalid field values (bad outcome, negative score, score/outcome mismatch, partial scores) |
 
 **Paginated response shape:**
 ```json

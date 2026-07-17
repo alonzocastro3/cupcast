@@ -5,7 +5,7 @@ from typing import Generic, TypeVar
 from pydantic import BaseModel
 
 from app.schemas.match import MatchCreate, MatchRead
-from app.schemas.prediction import PredictionCreate, PredictionRead, PredictionSummary
+from app.schemas.prediction import PredictionRead, PredictionSummary
 from app.schemas.team import TeamCreate, TeamRead
 
 T = TypeVar("T")
@@ -26,7 +26,6 @@ __all__ = [
     "TeamRead",
     "MatchCreate",
     "MatchRead",
-    "PredictionCreate",
     "PredictionRead",
     "PredictionSummary",
 ]

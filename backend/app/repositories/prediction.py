@@ -11,6 +11,21 @@ class PredictionRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
+    async def exists(self, match_id: int, session_id: str) -> bool:
+        result = await self.session.execute(
+            select(Prediction.id).where(
+                Prediction.match_id == match_id,
+                Prediction.session_id == session_id,
+            )
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def create(self, prediction: Prediction) -> Prediction:
+        self.session.add(prediction)
+        await self.session.flush()
+        await self.session.refresh(prediction)
+        return prediction
+
     async def get_summary_counts(self, match_id: int) -> dict[str, int]:
         """Return aggregate counts for a match using PostgreSQL FILTER clause."""
         result = await self.session.execute(
