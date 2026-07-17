@@ -138,6 +138,29 @@ curl "http://localhost:8000/api/v1/matches/1/prediction-summary"
 }
 ```
 
+## Prediction Engine
+
+`GET /api/v1/matches/{match_id}/model-prediction` returns a deterministic, explainable probability estimate with no ML dependencies.
+
+### Formula
+
+For each team a **strength score** is computed as a weighted sum of five normalized features:
+
+| Feature | Weight | Source field(s) |
+|---------|--------|-----------------|
+| Attacking | 25 % | `goals_for / (goals_for + goals_against)` |
+| Elo | 25 % | sigmoid((elo_rating − 1500) / 200) |
+| Defensive | 20 % | `1 − goals_against / (goals_for + goals_against)` |
+| FIFA ranking | 20 % | `1 − log(rank) / log(210)` (rank 1 → 1.0) |
+| Recent form | 5 % | `recent_form_score` clamped to [0, 1] |
+| Win rate | 5 % | `wins / (wins + draws + losses)` |
+
+A **home advantage bonus** (+0.05) is added to the home score. A **draw score** is derived as a baseline fraction of the average team strength. The three raw scores are passed through **softmax** to produce probabilities that sum to 1.0. Values are clamped to [0.01, 0.98] before re-normalizing to prevent degenerate outputs on extreme inputs.
+
+**Confidence** is scaled as `(max_probability − 0.333) / 0.667` and represents how far the leading outcome is above a uniform three-way split.
+
+The engine lives in `backend/app/prediction_engine/` and is designed to be swapped out for a trained model without changing the API contract.
+
 ## Database Migrations
 
 ```bash

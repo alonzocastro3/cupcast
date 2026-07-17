@@ -10,8 +10,9 @@ from app.repositories.match import MatchRepository
 from app.repositories.prediction import PredictionRepository
 from app.schemas import Page
 from app.schemas.match import MatchRead
-from app.schemas.prediction import PredictionSummary
+from app.schemas.prediction import ModelPrediction, PredictionSummary
 from app.services.match import MatchService
+from app.services.model_prediction import ModelPredictionService
 from app.services.prediction import PredictionService
 
 router = APIRouter(prefix="/api/v1/matches", tags=["matches"])
@@ -25,8 +26,13 @@ def _prediction_service(session: SessionDep) -> PredictionService:
     return PredictionService(MatchRepository(session), PredictionRepository(session))
 
 
+def _model_prediction_service(session: SessionDep) -> ModelPredictionService:
+    return ModelPredictionService(MatchRepository(session))
+
+
 MatchServiceDep = Annotated[MatchService, Depends(_match_service)]
 PredictionServiceDep = Annotated[PredictionService, Depends(_prediction_service)]
+ModelPredictionServiceDep = Annotated[ModelPredictionService, Depends(_model_prediction_service)]
 
 
 @router.get("", response_model=Page[MatchRead])
@@ -65,3 +71,14 @@ async def get_prediction_summary(
     if summary is None:
         raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
     return summary
+
+
+@router.get("/{match_id}/model-prediction", response_model=ModelPrediction)
+async def get_model_prediction(
+    match_id: int,
+    service: ModelPredictionServiceDep,
+) -> ModelPrediction:
+    prediction = await service.get_model_prediction(match_id)
+    if prediction is None:
+        raise HTTPException(status_code=404, detail=f"Match {match_id} not found")
+    return prediction

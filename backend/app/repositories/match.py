@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.enums import MatchStatus
 from app.models.match import Match
@@ -64,4 +65,12 @@ class MatchRepository:
 
     async def get(self, match_id: int) -> Match | None:
         result = await self.session.execute(select(Match).where(Match.id == match_id))
+        return result.scalar_one_or_none()
+
+    async def get_with_teams(self, match_id: int) -> Match | None:
+        result = await self.session.execute(
+            select(Match)
+            .where(Match.id == match_id)
+            .options(selectinload(Match.home_team), selectinload(Match.away_team))
+        )
         return result.scalar_one_or_none()
