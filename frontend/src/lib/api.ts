@@ -68,6 +68,28 @@ export interface PredictionSummary {
   away_win_percentage: number;
 }
 
+export interface PredictionSubmitRequest {
+  session_id: string;
+  predicted_outcome: PredictedOutcome;
+  predicted_home_score?: number | null;
+  predicted_away_score?: number | null;
+}
+
+export interface PredictionRead {
+  id: number;
+  match_id: number;
+  session_id: string;
+  predicted_outcome: PredictedOutcome;
+  predicted_home_score: number | null;
+  predicted_away_score: number | null;
+  created_at: string;
+}
+
+export interface PredictionSubmitResponse {
+  prediction: PredictionRead;
+  summary: PredictionSummary;
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 function getBase(): string {
@@ -94,6 +116,16 @@ async function get<T>(
   init?: RequestInit & { next?: { revalidate?: number } },
 ): Promise<T> {
   const res = await fetch(`${getBase()}${path}`, init);
+  if (!res.ok) throw new ApiError(res.status, path);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${getBase()}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
   if (!res.ok) throw new ApiError(res.status, path);
   return res.json() as Promise<T>;
 }
@@ -143,6 +175,12 @@ export const api = {
       return get(`/api/v1/matches/${id}/prediction-summary`, {
         next: { revalidate: 30 },
       });
+    },
+    submitPrediction(
+      id: number,
+      body: PredictionSubmitRequest,
+    ): Promise<PredictionSubmitResponse> {
+      return post(`/api/v1/matches/${id}/predictions`, body);
     },
   },
 };
