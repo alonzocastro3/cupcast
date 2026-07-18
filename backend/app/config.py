@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     football_api_timeout: float = 10.0
     football_api_max_retries: int = 3
 
+    # Background worker
+    sync_interval_seconds: int = 900  # 15 minutes
+    sync_lock_key: int = 20261001  # stable advisory lock key across restarts
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: object) -> list[str]:

@@ -7,6 +7,7 @@ from urllib.parse import urlparse
 import asyncpg
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -62,6 +63,12 @@ async def client() -> AsyncGenerator[AsyncClient, None]:
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
+async def _drop_enum_types(conn) -> None:
+    """Drop PostgreSQL enum types that SQLAlchemy's drop_all may leave behind."""
+    await conn.execute(text("DROP TYPE IF EXISTS matchstatus CASCADE"))
+    await conn.execute(text("DROP TYPE IF EXISTS predictedoutcome CASCADE"))
+
+
 @pytest_asyncio.fixture
 async def test_engine():
     """Fresh schema in cupcast_test for each test function."""
@@ -69,10 +76,12 @@ async def test_engine():
     engine = create_async_engine(_TEST_DB_URL, poolclass=NullPool)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await _drop_enum_types(conn)
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+        await _drop_enum_types(conn)
     await engine.dispose()
 
 

@@ -55,6 +55,44 @@ services:
       retries: 5
       start_period: 10s
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["python", "-m", "app.worker.main"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-cupcast}:${POSTGRES_PASSWORD:-cupcast}@db:5432/${POSTGRES_DB:-cupcast}
+      REDIS_URL: redis://redis:6379
+      SYNC_INTERVAL_SECONDS: ${SYNC_INTERVAL_SECONDS:-900}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+    healthcheck:
+      # Healthy when the health file was written within 2 × SYNC_INTERVAL_SECONDS.
+      # Default: 1800 s. Adjust SYNC_INTERVAL_SECONDS to change both the interval
+      # and the liveness threshold automatically.
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - |
+          import json, sys, time, os
+          path = '/tmp/worker_health.json'
+          if not os.path.exists(path):
+              sys.exit(1)
+          d = json.load(open(path))
+          threshold = int(os.environ.get('SYNC_INTERVAL_SECONDS', 900)) * 2
+          sys.exit(0 if time.time() - d['checked_at'] < threshold else 1)
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   frontend:
     build:
       context: ./frontend

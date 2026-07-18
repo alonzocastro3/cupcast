@@ -270,6 +270,153 @@ To reseed after running tests (tests use an isolated `cupcast_test` database and
 docker compose exec backend python -m app.seed
 ```
 
+## Data Ingestion
+
+CupCast can pull live team and fixture data from [football-data.org](https://www.football-data.org/) and upsert it into the database. The seed data is never deleted — ingestion only inserts or updates records.
+
+### 1. Get a free API key
+
+Register at https://www.football-data.org/client/register. The free tier covers World Cup fixtures.
+
+### 2. Set the environment variable
+
+Add to your `backend/.env` file:
+
+```env
+FOOTBALL_API_KEY=your_key_here
+```
+
+Optional settings (defaults shown):
+
+```env
+FOOTBALL_TOURNAMENT_ID=WC
+FOOTBALL_API_BASE_URL=https://api.football-data.org
+FOOTBALL_API_TIMEOUT=10.0
+FOOTBALL_API_MAX_RETRIES=3
+```
+
+### 3. Run the sync
+
+```bash
+# Via Docker
+docker compose exec backend python -m app.jobs.sync_tournament_data
+
+# Locally (inside the backend venv)
+python -m app.jobs.sync_tournament_data
+```
+
+### Output
+
+```
+2026-07-18T12:00:00 [INFO] __main__ — Starting sync — tournament=WC provider=https://api.football-data.org
+2026-07-18T12:00:02 [INFO] app.services.ingestion_service — Teams — inserted=32 updated=0 skipped=0 failed=0
+2026-07-18T12:00:03 [INFO] app.services.ingestion_service — Fixtures — inserted=64 updated=0 skipped=0 failed=0
+2026-07-18T12:00:03 [INFO] __main__ — Sync complete — no failures.
+```
+
+If `FOOTBALL_API_KEY` is not set the command exits immediately with a clear message (exit code 1) and no database changes are made. The seed data remains intact.
+
+## Background Worker
+
+CupCast includes a dedicated worker service that syncs tournament data on a configurable interval. It runs in a **separate Docker container** — the FastAPI web process never schedules background work.
+
+### Architecture
+
+```
+┌───────────┐   HTTP    ┌──────────────────────────────────┐
+│  Frontend │ ────────► │  backend  (FastAPI / uvicorn)    │
+└───────────┘           └──────────────────────────────────┘
+                                        │
+                              PostgreSQL + Redis (shared)
+                                        │
+                        ┌──────────────────────────────────┐
+                        │  worker  (asyncio loop)          │
+                        │                                  │
+                        │  every SYNC_INTERVAL_SECONDS:    │
+                        │  1. pg_try_advisory_lock         │
+                        │  2. fetch from football-data.org │
+                        │  3. upsert teams + fixtures      │
+                        │  4. release lock                 │
+                        │  5. write /tmp/worker_health.json│
+                        └──────────────────────────────────┘
+```
+
+### Concurrency safety
+
+The worker acquires a **PostgreSQL session-level advisory lock** (`pg_try_advisory_lock`) at the start of each sync. If a second worker replica tries to start while the first is running, it skips the cycle and logs:
+
+```
+Advisory lock (key=20261001) not acquired — another worker is syncing. Skipping this cycle.
+```
+
+The lock is released automatically when the connection closes, so crashes never deadlock.
+
+### Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `SYNC_INTERVAL_SECONDS` | `900` | Seconds between sync cycles (15 min) |
+| `SYNC_LOCK_KEY` | `20261001` | PostgreSQL advisory lock integer key |
+| `FOOTBALL_API_KEY` | *(none)* | Required for live data; worker keeps running without it |
+
+Add to `backend/.env` (or the root `.env` used by Docker Compose):
+
+```env
+FOOTBALL_API_KEY=your_key_here
+SYNC_INTERVAL_SECONDS=900
+```
+
+### Starting the worker
+
+Included in `docker-compose.yml` — starts automatically with:
+
+```bash
+docker compose up --build
+```
+
+To run standalone (local dev, inside the backend venv):
+
+```bash
+cd backend
+python -m app.worker.main
+```
+
+### Worker logs
+
+```
+2026-07-18T15:00:00 [INFO] app.worker.scheduler — Worker started — interval=900s tournament=WC lock_key=20261001
+2026-07-18T15:00:00 [INFO] app.worker.scheduler — Sync starting — tournament=WC
+2026-07-18T15:00:12 [INFO] app.services.ingestion_service — Teams — inserted=0 updated=4 skipped=28 failed=0
+2026-07-18T15:00:13 [INFO] app.services.ingestion_service — Fixtures — inserted=2 updated=10 skipped=52 failed=0
+2026-07-18T15:00:13 [INFO] app.worker.scheduler — Sync finished in 13.1s — inserted=2 updated=14 skipped=80 failed=0
+```
+
+### Health check
+
+Docker polls `/tmp/worker_health.json` every 60 s. The worker is healthy if `checked_at` is within `2 × SYNC_INTERVAL_SECONDS` of now. Inspect directly:
+
+```bash
+docker compose exec worker cat /tmp/worker_health.json
+```
+
+```json
+{
+  "checked_at": 1752847213.4,
+  "duration_s": 13.1,
+  "inserted": 2,
+  "updated": 14,
+  "skipped": 80,
+  "failed": 0,
+  "consecutive_failures": 0,
+  "skipped_no_key": false,
+  "skipped_locked": false
+}
+```
+
+### Graceful shutdown
+
+The worker installs `SIGTERM` and `SIGINT` handlers that call `scheduler.stop()`. The loop exits within 1 second (sleep ticks are 1 s). Docker Compose sends `SIGTERM` on `docker compose stop`, so no sync is ever left half-finished.
+
 ## Running Tests
 
 Tests run against a separate `cupcast_test` database (created automatically by the test suite).
@@ -290,7 +437,7 @@ cd backend && pytest -v
 
 ```
 cupcast/
-├── docker-compose.yml
+├── docker-compose.yml           # db, redis, backend, worker, frontend
 ├── .env.example
 ├── backend/
 │   ├── Dockerfile
@@ -306,18 +453,33 @@ cupcast/
 │   │   ├── enums.py             # MatchStatus, PredictedOutcome
 │   │   ├── seed.py              # Idempotent seed script
 │   │   ├── models/
-│   │   │   ├── team.py          # Team ORM model
+│   │   │   ├── team.py          # Team ORM model (+ external_id)
 │   │   │   ├── match.py         # Match ORM model
 │   │   │   └── prediction.py    # Prediction ORM model
-│   │   └── schemas/
-│   │       ├── team.py          # Team Pydantic schemas
-│   │       ├── match.py         # Match Pydantic schemas
-│   │       └── prediction.py    # Prediction Pydantic schemas
+│   │   ├── schemas/
+│   │   │   ├── team.py          # Team Pydantic schemas
+│   │   │   ├── match.py         # Match Pydantic schemas
+│   │   │   └── prediction.py    # Prediction Pydantic schemas
+│   │   ├── integrations/
+│   │   │   └── football/
+│   │   │       ├── base.py      # FootballDataProvider ABC + RawTeam/RawFixture
+│   │   │       └── provider.py  # football-data.org v4 adapter (retries + backoff)
+│   │   ├── jobs/
+│   │   │   └── sync_tournament_data.py  # One-shot CLI sync command
+│   │   ├── services/
+│   │   │   └── ingestion_service.py     # Upsert logic + SyncResult
+│   │   └── worker/
+│   │       ├── main.py          # Entry point: asyncio loop + SIGTERM handler
+│   │       ├── scheduler.py     # SyncScheduler (interval + tick logic)
+│   │       ├── lock.py          # PostgreSQL advisory lock context manager
+│   │       └── health.py        # /tmp/worker_health.json writer/reader
 │   └── tests/
 │       ├── conftest.py          # HTTP client + test DB fixtures
 │       ├── test_health.py
 │       ├── test_models.py       # DB constraint integration tests
-│       └── test_seed.py         # Seed correctness + idempotency
+│       ├── test_seed.py         # Seed correctness + idempotency
+│       ├── test_ingestion.py    # Ingestion service: upserts, idempotency, errors
+│       └── test_worker.py       # Advisory lock, scheduler ticks, failure recovery
 └── frontend/
     ├── Dockerfile
     ├── package.json
