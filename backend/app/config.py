@@ -9,6 +9,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379"
     cors_origins: list[str] = ["http://localhost:3000"]
 
+    # Football data provider
+    football_api_key: str | None = None
+    football_api_base_url: str = "https://api.football-data.org"
+    football_tournament_id: str = "WC"
+    football_api_timeout: float = 10.0
+    football_api_max_retries: int = 3
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v: object) -> list[str]:

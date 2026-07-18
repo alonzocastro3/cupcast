@@ -13,6 +13,7 @@ class Team(Base):
     __tablename__ = "teams"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    external_id: Mapped[str | None] = mapped_column(String(50), nullable=True, unique=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
     country_code: Mapped[str] = mapped_column(String(3), nullable=False, unique=True)
     group_name: Mapped[str] = mapped_column(String(10), nullable=False)
