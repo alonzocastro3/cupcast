@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { api, ApiError, type TeamRead, type MatchRead } from "@/lib/api";
+import { api, ApiError, type TeamRead, type MatchRead, type TeamSentimentResponse } from "@/lib/api";
 import { MatchCard } from "@/components/domain/MatchCard";
+import { SentimentCard } from "@/components/domain/SentimentCard";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { formatStage } from "@/lib/utils";
 
@@ -32,6 +33,8 @@ export default async function TeamPage({ params }: Props) {
   let team: TeamRead;
   let matches: MatchRead[] = [];
   let teamMap = new Map<number, TeamRead>();
+  let sentimentData: TeamSentimentResponse | null = null;
+  const fetchedAt = new Date().toISOString();
 
   try {
     team = await api.teams.get(teamId);
@@ -41,14 +44,16 @@ export default async function TeamPage({ params }: Props) {
   }
 
   try {
-    const [matchesPage, allTeamsPage] = await Promise.all([
+    const [matchesPage, allTeamsPage, sentiment] = await Promise.all([
       api.matches.list({ team_id: teamId, limit: 100 }),
       api.teams.list({ limit: 100 }),
+      api.sentiment.team(teamId).catch(() => null),
     ]);
     matches = matchesPage.items;
     teamMap = new Map(allTeamsPage.items.map((t) => [t.id, t]));
+    sentimentData = sentiment;
   } catch {
-    // Non-fatal — show team without matches
+    // Non-fatal — show team without matches or sentiment
   }
 
   const totalGames = team.wins + team.draws + team.losses;
@@ -140,6 +145,17 @@ export default async function TeamPage({ params }: Props) {
               />
             </div>
           )}
+        </div>
+      )}
+
+      {/* News Sentiment */}
+      {sentimentData && (
+        <div className="mb-10">
+          <SentimentCard
+            team={sentimentData.team}
+            metadata={sentimentData.metadata}
+            fetchedAt={fetchedAt}
+          />
         </div>
       )}
 

@@ -90,6 +90,42 @@ export interface PredictionSubmitResponse {
   summary: PredictionSummary;
 }
 
+export type SentimentLabel = "positive" | "neutral" | "negative";
+
+export interface ArticleSentimentRead {
+  article_id: string;
+  title: string;
+  score: number;
+  label: SentimentLabel;
+  confidence: number;
+}
+
+export interface TeamSentimentRead {
+  team_code: string;
+  team_name: string | null;
+  article_count: number;
+  average_score: number;
+  label: SentimentLabel;
+  confidence: number;
+  articles: ArticleSentimentRead[];
+}
+
+export interface SentimentMetadata {
+  analyzer: string;
+  disclaimer: string;
+  sample_size: number;
+}
+
+export interface TeamSentimentResponse {
+  metadata: SentimentMetadata;
+  team: TeamSentimentRead;
+}
+
+export interface AllSentimentResponse {
+  metadata: SentimentMetadata;
+  teams: TeamSentimentRead[];
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 function getBase(): string {
@@ -148,6 +184,15 @@ export const api = {
     },
     get(id: number): Promise<TeamRead> {
       return get(`/api/v1/teams/${id}`, { next: { revalidate: 600 } });
+    },
+  },
+
+  sentiment: {
+    all(): Promise<AllSentimentResponse> {
+      return get("/api/v1/sentiment", { next: { revalidate: 300 } });
+    },
+    team(id: number): Promise<TeamSentimentResponse> {
+      return get(`/api/v1/teams/${id}/sentiment`, { next: { revalidate: 300 } });
     },
   },
 
