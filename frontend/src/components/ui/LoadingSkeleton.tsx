@@ -52,6 +52,31 @@ export function MatchCardSkeleton() {
   );
 }
 
+export function ForecastRowSkeleton() {
+  return (
+    <div className="flex items-center gap-4 px-4 py-3 border-b border-gray-800">
+      <Bone className="h-4 w-4 flex-shrink-0" />
+      <div className="flex-1 space-y-1">
+        <Bone className="h-4 w-28" />
+        <Bone className="h-2 w-16" />
+      </div>
+      <Bone className="h-4 w-10 hidden sm:block" />
+      <div className="hidden sm:block space-y-1 w-20">
+        <Bone className="h-3 w-10" />
+        <Bone className="h-1.5 w-full" />
+      </div>
+      <div className="hidden sm:block space-y-1 w-20">
+        <Bone className="h-3 w-10" />
+        <Bone className="h-1.5 w-full" />
+      </div>
+      <div className="space-y-1 w-20">
+        <Bone className="h-3 w-10" />
+        <Bone className="h-1.5 w-full" />
+      </div>
+    </div>
+  );
+}
+
 export function GridSkeleton({
   count = 6,
   Card,

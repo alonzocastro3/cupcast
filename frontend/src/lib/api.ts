@@ -126,6 +126,34 @@ export interface AllSentimentResponse {
   teams: TeamSentimentRead[];
 }
 
+export interface TeamTournamentProbabilities {
+  team_code: string;
+  team_name: string | null;
+  group: string;
+  group_advance_probability: number;
+  quarterfinal_probability: number;
+  semifinal_probability: number;
+  final_probability: number;
+  championship_probability: number;
+}
+
+export interface SimulationMeta {
+  algorithm: string;
+  goal_model: string;
+  tie_breaking: string;
+  knockout_draws: string;
+  limitations: string[];
+}
+
+export interface TournamentSimulationResponse {
+  simulation_count: number;
+  model_version: string;
+  random_seed: number;
+  generated_at: string;
+  teams: TeamTournamentProbabilities[];
+  metadata: SimulationMeta;
+}
+
 // ── Client ────────────────────────────────────────────────────────────────────
 
 function getBase(): string {
@@ -193,6 +221,12 @@ export const api = {
     },
     team(id: number): Promise<TeamSentimentResponse> {
       return get(`/api/v1/teams/${id}/sentiment`, { next: { revalidate: 300 } });
+    },
+  },
+
+  simulations: {
+    tournament(opts: { n?: number; seed?: number } = {}): Promise<TournamentSimulationResponse> {
+      return get(`/api/v1/simulations/tournament${qs(opts)}`, { next: { revalidate: 300 } });
     },
   },
 

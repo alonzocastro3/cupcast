@@ -18,6 +18,7 @@ TTL_MODEL_PREDICTION: int = 300  # 5 min
 TTL_PREDICTION_SUMMARY: int = 30  # 30 sec
 TTL_NEWS: int = 600            # 10 min
 TTL_SENTIMENT: int = 300       # 5 min
+TTL_SIMULATION: int = 300      # 5 min
 
 
 # ── Cache key builders ────────────────────────────────────────────────────────
@@ -64,6 +65,10 @@ def key_sentiment_all() -> str:
 
 def key_sentiment_team(team_code: str) -> str:
     return f"cupcast:sentiment:team:{team_code.upper()}"
+
+
+def key_simulation(n: int, seed: int | None) -> str:
+    return f"cupcast:simulation:tournament:{n}:{seed}"
 
 
 # ── Service ───────────────────────────────────────────────────────────────────
