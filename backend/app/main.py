@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import matches, teams
+from app.routers import matches, news, teams
 
 app = FastAPI(title="CupCast API", version="0.1.0")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 
 app.include_router(teams.router)
 app.include_router(matches.router)
+app.include_router(news.router)
 
 
 @app.get("/health")

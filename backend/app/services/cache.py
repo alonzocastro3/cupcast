@@ -16,6 +16,7 @@ TTL_TEAMS: int = 600           # 10 min
 TTL_MATCHES: int = 120         # 2 min
 TTL_MODEL_PREDICTION: int = 300  # 5 min
 TTL_PREDICTION_SUMMARY: int = 30  # 30 sec
+TTL_NEWS: int = 600            # 10 min
 
 
 # ── Cache key builders ────────────────────────────────────────────────────────
@@ -48,6 +49,12 @@ def key_model_prediction(match_id: int) -> str:
 
 def key_prediction_summary(match_id: int) -> str:
     return f"cupcast:matches:{match_id}:prediction-summary"
+
+
+def key_news(query: str) -> str:
+    import hashlib
+    digest = hashlib.sha256(query.encode()).hexdigest()[:8]
+    return f"cupcast:news:{digest}"
 
 
 # ── Service ───────────────────────────────────────────────────────────────────

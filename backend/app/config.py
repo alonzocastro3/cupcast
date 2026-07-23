@@ -16,6 +16,13 @@ class Settings(BaseSettings):
     football_api_timeout: float = 10.0
     football_api_max_retries: int = 3
 
+    # News provider (NewsAPI.org)
+    news_api_key: str | None = None
+    news_api_base_url: str = "https://newsapi.org"
+    news_api_timeout: float = 10.0
+    news_api_max_retries: int = 2
+    news_query: str = "FIFA World Cup 2026"
+
     # Background worker
     sync_interval_seconds: int = 900  # 15 minutes
     sync_lock_key: int = 20261001  # stable advisory lock key across restarts
